@@ -7,6 +7,15 @@ from viewergui import Ui_Form
 from scipy import ndimage
 from scipy.interpolate import splrep, splev, sproot
 import glob
+from PyQt4.QtCore import QFileSystemWatcher
+import os
+
+def xor(lst1, lst2):
+    """ returns a tuple of items of item not in either of lists
+    """
+    x = lst2 if len(lst2) > len(lst1) else lst1
+    y = lst1 if len(lst1) < len(lst2) else lst2
+    return tuple(item for item in x if item not in y)
 
 def FWHM_spline(x, y):
     """
@@ -80,12 +89,32 @@ class RawViewer(QtGui.QDialog):
         self.ui.iv_2dspec.scene.sigMouseClicked.connect(self.MouseClick2d)
 
         self.directory = str(QtGui.QFileDialog.getExistingDirectory(self, "Select Directory"))
-        self.populate_image_list(directory=self.directory)
+        self.populate_image_list()
 
-    def populate_image_list(self, directory):
-        for filename in glob.iglob(directory + '/*.fit'):
+        self._initialContent = os.listdir(self.directory)
+        self._fileSysWatcher = QtCore.QFileSystemWatcher()
+        self._fileSysWatcher.addPath(self.directory)
+        QtCore.QObject.connect(self._fileSysWatcher, QtCore.SIGNAL("directoryChanged(QString)"),
+            self,      QtCore.SLOT("slotDirChanged(QString)"))
+
+    @QtCore.pyqtSlot("QString")
+    def slotDirChanged(self, path):
+        newContent = ''.join(xor(os.listdir(path), self._initialContent))
+
+        self._initialContent = os.listdir(path)
+        msg = ""
+        if newContent not in self._initialContent:
+            msg = "removed: %s" % newContent
+        else:
+            msg = "added: %s" %  newContent
+        print("Detected Directory Change!! \n %s" % msg)
+        self.populate_image_list()
+
+    def populate_image_list(self):
+        self.ui.listWidget.clear()
+        for filename in glob.iglob(self.directory + '/*.fit'):
             self.ui.listWidget.addItem(filename)
-        for filename in glob.iglob(directory + '/*.fits'):
+        for filename in glob.iglob(self.directory + '/*.fits'):
             self.ui.listWidget.addItem(filename)
 
     def listwidget_click(self, item):
